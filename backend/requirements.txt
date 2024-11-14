@@ -1,0 +1,5 @@
+flask
+schedule
+flask_cors
+webdriver-manager
+selenium
