@@ -11,7 +11,7 @@ function fetchAndRenderData() {
   }
 
   if (fromCurrency === toCurrency) {
-    alert('Please select different currencies');
+    alert('To and From currencies cannot be the same');
     return;
   }
 

@@ -11,7 +11,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 import schedule
 
 # SQLite Database setup
-conn = sqlite3.connect('forex_data.db')
+# conn = sqlite3.connect('forex_data.db')
+conn = sqlite3.connect('forex_data.db', check_same_thread=False)
 c = conn.cursor()
 
 # Create the forex data table if it doesn't exist
@@ -79,6 +80,7 @@ def scrape_forex_data(from_currency, to_currency, start_date, end_date):
         end_time = time.time()
         total_time = end_time - start_time
         print(f"Total time taken: {total_time:.2f} seconds")
+        save_to_database(data)
         return data
 
     except Exception as e:
@@ -114,10 +116,3 @@ def update_forex_data():
     else:
         print("No new data found.")
 
-# Schedule the update to run every day at 12:00 AM UTC
-schedule.every().day.at("00:00").do(update_forex_data)
-
-# Run scheduled tasks
-# while True:
-#     schedule.run_pending()
-#     time.sleep(1)
