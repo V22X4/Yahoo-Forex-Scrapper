@@ -23,7 +23,8 @@ function fetchAndRenderData() {
     body: JSON.stringify({ from: fromCurrency, to: toCurrency, period: period })
   })
   .then(response => response.json())
-  .then(data => {
+    .then(data => {
+    console.log(data)
     renderChart(data);
   })
   .catch(error => {

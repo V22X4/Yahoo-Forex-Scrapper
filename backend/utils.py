@@ -10,8 +10,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 import schedule
 
+
 # SQLite Database setup
-# conn = sqlite3.connect('forex_data.db')
 conn = sqlite3.connect('forex_data.db', check_same_thread=False)
 c = conn.cursor()
 
@@ -21,98 +21,128 @@ c.execute('''CREATE TABLE IF NOT EXISTS forex_data
 conn.commit()
 
 def get_driver():
-    # Set up Selenium WebDriver with headless mode
+    """Configure and return a Chrome WebDriver with optimal settings"""
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run in headless mode (no UI)
+    chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
     
-    # Automatically download and set up the correct ChromeDriver version
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    return driver
+    try:
+        driver = webdriver.Chrome(
+            service=Service(ChromeDriverManager().install()),
+            options=chrome_options
+        )
+        return driver
+    except Exception as e:
+        print(f"Failed to create WebDriver: {str(e)}")
+        raise
+
+def period_to_days(period):
+    period_to_days = {'1W': 7, '1M': 30, '3M': 90, '6M': 180, '1Y': 365}
+    return period_to_days[period]
 
 def convert_date_to_timestamp(date_str):
-    """Convert date string to Unix timestamp."""
+    """Convert date string to Unix timestamp"""
     return int(datetime.strptime(date_str, "%Y-%m-%d").timestamp())
 
-def scrape_forex_data(from_currency, to_currency, start_date, end_date):
+def scrape_forex_data(from_currency, to_currency, period):
+   
+    """Scrape forex data from Yahoo Finance"""
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=period_to_days(period))).strftime("%Y-%m-%d")
+    
     print(f"Scraping forex data from {start_date} to {end_date} for {from_currency}-{to_currency}...")
-    """Scrape forex data from Yahoo Finance within a date range."""
-    # Construct the URL with Unix timestamps for start and end dates
+    
     url = f'https://finance.yahoo.com/quote/{from_currency}{to_currency}=X/history?period1={convert_date_to_timestamp(start_date)}&period2={convert_date_to_timestamp(end_date)}'
-
+    
+    driver = None
     try:
-        
-        start_time = time.time()
         driver = get_driver()
-
-        # Open the URL
         driver.get(url)
-
-        # Find the table containing historical prices
-        table = driver.find_element(By.XPATH, "//table[@class='table yf-j5d1ld noDl']")
-
-        # Extract the rows
-        rows = table.find_elements(By.XPATH, ".//tbody/tr")
-
-        # Parse data from rows
-        data = []
-        for row in rows[1:]:  # Skip the header row
-            cols = row.find_elements(By.TAG_NAME, "td")
-            if len(cols) < 5:
-                continue  # Skip incomplete rows
-
-            date = cols[0].text
-            try:
-                exchange_rate = float(cols[4].text.replace(',', ''))  # Parse exchange rate
-                data.append({
-                    'date': datetime.strptime(date, "%b %d, %Y").strftime("%Y-%m-%d"),
-                    'from_currency': from_currency,
-                    'to_currency': to_currency,
-                    'exchange_rate': exchange_rate
-                })
-            except ValueError:
-                print(f"Could not parse exchange rate on {date}")
-                continue
-
-        driver.quit()
         
-        end_time = time.time()
-        total_time = end_time - start_time
-        print(f"Total time taken: {total_time:.2f} seconds")
+        # Wait for table to be present
+        wait = WebDriverWait(driver, 10)
+        table = wait.until(EC.presence_of_element_located((By.XPATH, "//table[@class='table yf-j5d1ld noDl']")))
+        
+        rows = table.find_elements(By.XPATH, ".//tbody/tr")
+        data = []
+        
+        for row in rows[1:]:
+            cols = row.find_elements(By.TAG_NAME, "td")
+            if len(cols) >= 5:
+                try:
+                    date = cols[0].text
+                    exchange_rate = float(cols[4].text.replace(',', ''))
+                    data_point = {
+                        'date': datetime.strptime(date, "%b %d, %Y").strftime("%Y-%m-%d"),
+                        'from_currency': from_currency,
+                        'to_currency': to_currency,
+                        'exchange_rate': exchange_rate
+                    }
+                    data.append(data_point)
+                   
+                except (ValueError, IndexError) as e:
+                    print(f"Error parsing row: {e}")
+                    continue
+        
         save_to_database(data)
         return data
-
+        
     except Exception as e:
         print(f"Error scraping forex data: {e}")
         return []
+    
+    finally:
+        if driver:
+            driver.quit()
 
-def save_to_database(data):
-    """Save scraped data to SQLite database."""
-    for entry in data:
-        c.execute('''INSERT INTO forex_data (date, from_currency, to_currency, exchange_rate)
-                     VALUES (?, ?, ?, ?)''',
-                  (entry['date'], entry['from_currency'], entry['to_currency'], entry['exchange_rate']))
-    conn.commit()
+def save_to_database(entries):
+    """Save entries to database ensuring no duplicate (date, from_currency, to_currency)."""
+    if isinstance(entries, dict):  # Check if it's a single entry (dict)
+        entries = [entries]  # Convert to a list of one entry for uniform handling
+
+    try:
+        for entry in entries:
+            # Check if the (date, from_currency, to_currency) already exists in the database
+            c.execute('''SELECT COUNT(*) FROM forex_data WHERE date = ? AND from_currency = ? AND to_currency = ?''',
+                      (entry['date'], entry['from_currency'], entry['to_currency']))
+            count = c.fetchone()[0]
+
+            if count == 0:  # If no entry exists, insert it
+                c.execute('''INSERT INTO forex_data 
+                             (date, from_currency, to_currency, exchange_rate)
+                             VALUES (?, ?, ?, ?)''',
+                          (entry['date'], entry['from_currency'], 
+                           entry['to_currency'], entry['exchange_rate']))
+                conn.commit()
+                # print(f"Inserted new entry for {entry['from_currency']}-{entry['to_currency']} on {entry['date']}")
+            # else:
+                # print(f"Entry for {entry['from_currency']}-{entry['to_currency']} on {entry['date']} already exists.")
+
+    except Exception as e:
+        print(f"Error saving to database: {e}")
+        conn.rollback()
+
 
 def update_forex_data():
-    """Update forex data by scraping missing dates."""
-    # Get the latest date from the database
-    c.execute("SELECT MAX(date) FROM forex_data")
-    latest_date = c.fetchone()[0]
+    """Update forex data for all currency pairs and periods"""
+    currency_pairs = [('GBP', 'INR'), ('AED', 'INR'), ('EUR', 'USD')]
+    periods = ['1W', '1M', '3M', '6M', '1Y']
+    
+    for from_currency, to_currency in currency_pairs:
+        for period in periods:
+            try:
+                print(f"Processing {from_currency}-{to_currency} for {period}...")
+                scrape_forex_data(from_currency, to_currency, period)
+                time.sleep(2)  # Avoid too many rapid requests
+            except Exception as e:
+                print(f"Error processing {from_currency}-{to_currency}: {e}")
 
-    # Set start and end dates for scraping
-    if latest_date:
-        start_date = (datetime.strptime(latest_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
-    else:
-        start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
-    end_date = datetime.now().strftime("%Y-%m-%d")
-
-    # Scrape and save new data
-    new_data = scrape_forex_data('EUR', 'USD', start_date, end_date)
-    if new_data:
-        save_to_database(new_data)
-        print(f"Forex data updated from {start_date} to {end_date}")
-    else:
-        print("No new data found.")
+def run_scheduler():
+    """Run the scheduler loop"""
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
 
