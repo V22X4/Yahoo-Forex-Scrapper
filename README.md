@@ -1,22 +1,75 @@
-# Yahoo Forex Scrapper
+# Forex Visualization App
 
-This project is a full-stack application that allows users to visualize historic exchange rate data.
+This is a simple Forex visualization application with a **React.js frontend** and a **Flask backend**. The app allows users to fetch and visualize historical forex exchange rates for selected currency pairs over different periods.
 
-## Backend (Python)
+---
 
-The backend is built using Flask and provides the following endpoints:
+## Prerequisites
 
-1. `POST /api/forex-data`: This endpoint takes the `from` currency, `to` currency, and `period` as request parameters and returns the corresponding historic exchange rate data.
-2. `GET /update-forex-data`: This endpoint triggers the periodic update of the forex data in the SQLite database.
+Ensure you have the following installed on your system:
 
-The `utils.py` file contains the functions for scraping the data from Yahoo Finance and updating the database.
+- **Node.js** (v16 or later) and npm
+- **Python** (v3.9 or later) with `pip`
 
-## Frontend (HTML, CSS, JavaScript)
+---
 
-The frontend is a simple web application built using HTML, CSS, and JavaScript. It allows the user to select the `from` currency, `to` currency, and `period`, and then fetches the data from the backend API and renders a line chart using Chart.js.
+## Getting Started
 
-## Setup
+Follow the steps below to get the application running locally.
 
-1. Install the required Python dependencies by running `pip install -r requirements.txt` in the `backend` directory.
-2. Run the Flask app using `python app.py`.
-3. Open the `index.html` file in a web browser to access the frontend.
+### 1. Clone the Repository
+
+```bash
+git clone [<repository_url>](https://github.com/V22X4/Yahoo-Forex-Scrapper.git)
+cd Yahoo-Forex-Scrapper
+```
+
+---
+
+### 2. Start the Flask Backend
+
+1. Navigate to the `backend` directory:
+
+   ```bash
+   cd backend
+   ```
+
+2. Install the required dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Start the Flask server:
+
+   ```bash
+   python app.py
+   ```
+
+4. Verify the server is running by visiting [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser.
+
+---
+
+### 3. Start the React Frontend
+
+1. Navigate to the `frontend` directory:
+
+   ```bash
+   cd ../frontend
+   ```
+
+2. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+3. Start the development server:
+
+   ```bash
+   npm start
+   ```
+
+4. Open the application in your browser at [http://localhost:3000](http://localhost:3000).
+
+---
