@@ -3,3 +3,4 @@ schedule
 flask_cors
 webdriver-manager
 Selenium
+gunicorn
