@@ -20,7 +20,7 @@ Follow the steps below to get the application running locally.
 ### 1. Clone the Repository
 
 ```bash
-git clone [<repository_url>](https://github.com/V22X4/Yahoo-Forex-Scrapper.git)
+git clone https://github.com/V22X4/Yahoo-Forex-Scrapper.git
 cd Yahoo-Forex-Scrapper
 ```
 
