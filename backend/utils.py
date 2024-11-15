@@ -108,8 +108,10 @@ def scrape_forex_data(from_currency, to_currency, period, logger=None):
     
     while retry_count < max_retries:
         try:
+            print('Reached here')
             driver = get_driver()
             driver.get(url)
+            print('get driver')
             
             # Wait for table with timeout
             wait = WebDriverWait(driver, 20)
@@ -117,6 +119,7 @@ def scrape_forex_data(from_currency, to_currency, period, logger=None):
                 (By.XPATH, "//table[@class='table yf-j5d1ld noDl']")
             ))
             
+            print("table")
             rows = table.find_elements(By.XPATH, ".//tbody/tr")
             data = []
             
