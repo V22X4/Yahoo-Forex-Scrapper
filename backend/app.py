@@ -1,78 +1,159 @@
 from flask import Flask, jsonify, request
-from utils import scrape_forex_data, update_forex_data, run_scheduler
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import sqlite3
 import threading
 import schedule
+import signal
+import sys
+import time
+import logging
 from werkzeug.serving import is_running_from_reloader
+from contextlib import contextmanager
+from utils import scrape_forex_data, update_forex_data, init_database
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
 
+# Global variables for thread management
+scheduler_thread = None
+should_run_scheduler = threading.Event()
+
+@contextmanager
 def get_db_connection():
-    conn = sqlite3.connect('forex_data.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+    """Context manager for database connections"""
+    conn = None
+    try:
+        conn = sqlite3.connect('forex_data.db', timeout=20)
+        conn.row_factory = sqlite3.Row
+        yield conn
+    except sqlite3.Error as e:
+        logger.error(f"Database error: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully"""
+    logger.info("Shutdown signal received. Cleaning up...")
+    should_run_scheduler.clear()
+    if scheduler_thread:
+        scheduler_thread.join(timeout=5)
+    sys.exit(0)
+
+def run_scheduler():
+    """Run the scheduler loop with proper shutdown handling"""
+    logger.info("Scheduler thread started")
+    while should_run_scheduler.is_set():
+        try:
+            schedule.run_pending()
+            should_run_scheduler.wait(timeout=1)
+        except Exception as e:
+            logger.error(f"Error in scheduler: {e}")
+            time.sleep(1)  # Prevent rapid error loops
+    logger.info("Scheduler thread stopping")
 
 @app.route('/api/forex-data', methods=['POST'])
 def get_forex_data():
     try:
         data = request.get_json()
+        if not data or not all(key in data for key in ['from', 'to', 'period']):
+            return jsonify({'error': 'Missing required parameters'}), 400
+
         from_currency = data['from']
         to_currency = data['to']
         period = data['period']
-        
-        # First try to get data from the database
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # Calculate the date range based on the period
+
+        # Validate period
+        valid_periods = ['1W', '1M', '3M', '6M', '1Y']
+        if period not in valid_periods:
+            return jsonify({'error': 'Invalid period'}), 400
+
+        # Calculate date range
         end_date = datetime.now()
-        if period == '1W':
-            start_date = end_date - timedelta(days=7)
-        elif period == '1M':
-            start_date = end_date - timedelta(days=30)
-        elif period == '3M':
-            start_date = end_date - timedelta(days=90)
-        elif period == '6M':
-            start_date = end_date - timedelta(days=180)
-        else:  # 1Y
-            start_date = end_date - timedelta(days=365)
+        period_days = {
+            '1W': 7, '1M': 30, '3M': 90,
+            '6M': 180, '1Y': 365
+        }
+        start_date = end_date - timedelta(days=period_days[period])
+
+        try:
             
-        # If no data in database, scrape it
-        forex_data = scrape_forex_data(from_currency, to_currency, period)
-        return jsonify(forex_data)
-    
+            # scrape it
+            forex_data = scrape_forex_data(from_currency, to_currency, period)
+            return jsonify(forex_data)
+
+
+        except sqlite3.Error as e:
+            logger.error(f"Database error: {e}")
+            return jsonify({'error': 'Database error occurred'}), 500
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error in get_forex_data: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/update', methods=['POST'])
 def trigger_update():
     try:
-        update_forex_data()
+        update_thread = threading.Thread(
+            target=update_forex_data,
+            daemon=True,
+            kwargs={'logger': logger}
+        )
+        update_thread.start()
         return jsonify({'message': 'Update triggered successfully'})
     except Exception as e:
+        logger.error(f"Error triggering update: {e}")
         return jsonify({'error': str(e)}), 500
-    
-# Start the scheduler in a separate thread when the app starts
+
 def start_scheduler():
+    """Start the scheduler thread with proper initialization"""
     global scheduler_thread
     if not is_running_from_reloader():
-        schedule.every(24).hours.do(update_forex_data)
-        scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+        should_run_scheduler.set()
+        schedule.every(24).hours.do(lambda: update_forex_data(logger=logger))
+        scheduler_thread = threading.Thread(
+            target=run_scheduler,
+            daemon=True
+        )
         scheduler_thread.start()
-
-# Ensure that the scheduler thread is joined before the app stops
-def shutdown_scheduler():
-    global scheduler_thread
-    if scheduler_thread:
-        scheduler_thread.join()
-
-# Flask application entry point
-if __name__ == '__main__':
-    start_scheduler()  # Start the scheduler thread when the app starts
+        logger.info("Scheduler started successfully")
+        
+def initialize_app():
+    """Initialize application dependencies"""
     try:
-        app.run(debug=True)  # Run the Flask app
+        init_database()  # Initialize database and create tables
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        sys.exit(1)
+
+if __name__ == '__main__':
+    
+    initialize_app()
+    # Set up signal handlers
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Start scheduler
+    start_scheduler()
+    
+    try:
+        # Run Flask app
+        app.run(debug=True, use_reloader=True)
+    except Exception as e:
+        logger.error(f"Error starting Flask app: {e}")
     finally:
-        shutdown_scheduler()  # Join the scheduler thread when the app shuts down
+        # Cleanup
+        should_run_scheduler.clear()
+        if scheduler_thread:
+            scheduler_thread.join(timeout=5)
+        logger.info("Application shutdown complete")
