@@ -154,3 +154,115 @@ canvas#forex-chart {
     box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
   }
 }
+
+/* Existing styles remain the same */
+
+/* Loading spinner */
+.loader {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #ffffff;
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  display: inline-block;
+  animation: rotation 1s linear infinite;
+}
+
+@keyframes rotation {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Button with loader */
+button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+button:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Error message styling */
+.error-message {
+  background-color: #fee2e2;
+  border: 1px solid #ef4444;
+  color: #b91c1c;
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  margin: 1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.error-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* Loading overlay for chart */
+.chart-container {
+  position: relative;
+  background-color: var(--card-background);
+  padding: 1.5rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  z-index: 10;
+  border-radius: var(--border-radius);
+}
+
+.loading-overlay .loader {
+  width: 40px;
+  height: 40px;
+  border-width: 3px;
+  border-color: var(--accent-color);
+  border-bottom-color: transparent;
+}
+
+.loading-overlay p {
+  color: var(--text-color);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .error-message {
+    background-color: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+  }
+
+  .loading-overlay {
+    background-color: rgba(45, 55, 72, 0.8);
+  }
+
+  .loading-overlay p {
+    color: #e2e8f0;
+  }
+}
