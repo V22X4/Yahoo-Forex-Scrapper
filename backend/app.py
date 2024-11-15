@@ -8,7 +8,6 @@ import signal
 import sys
 import time
 import logging
-import os
 from werkzeug.serving import is_running_from_reloader
 from contextlib import contextmanager
 from utils import scrape_forex_data, update_forex_data, init_database
@@ -149,9 +148,7 @@ if __name__ == '__main__':
     
     try:
         # Run Flask app
-        port = int(os.getenv("PORT", 3000))  # Default to 5000 if not defined
-        app.run(debug=True, use_reloader=True, host='0.0.0.0', port=port)
-
+        app.run(debug=True, use_reloader=True)
     except Exception as e:
         logger.error(f"Error starting Flask app: {e}")
     finally:

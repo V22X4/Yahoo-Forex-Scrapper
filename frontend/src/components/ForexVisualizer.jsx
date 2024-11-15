@@ -152,12 +152,12 @@ export const ForexVisualizer = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis
-                  domain={[
+                    domain={[
                       (dataMin) => Math.floor(dataMin * 0.995),
                       (dataMax) => Math.ceil(dataMax * 1.005),
-                  ]}
+                    ]}
                     tickFormatter={(value) => value.toFixed(2)}
-                />
+                  />
                   <Tooltip />
                   <Line
                     type="monotone"
